@@ -6,27 +6,24 @@ import seaborn as sns
 
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, roc_auc_score
+from sklearn.metrics import classification_report, confusion_matrix
 from imblearn.over_sampling import RandomOverSampler, SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
-# Configuración de estilo idéntica
+# Configuración de estilo
 sns.set_theme(style="whitegrid", palette="muted")
 plt.rcParams.update({'font.sans-serif': 'DejaVu Sans'})
 
-# Carpeta para guardar las imágenes de esta actividad
 carpeta_salida = "Desbalance Titanic"
 os.makedirs(carpeta_salida, exist_ok=True)
 
-# Cargar dataset del Titanic (ajusta el nombre del archivo si es necesario)
+# Cargar dataset del Titanic
 ruta_titanic = "titanic-Dataset.csv"
 if not os.path.exists(ruta_titanic):
-    # Intento alternativo de nombre común
     ruta_titanic = "titanic.csv"
 
 df_titanic = pd.read_csv(ruta_titanic)
 
-# Preprocesamiento básico para aislar características numéricas y la variable objetivo
 target_col = 'Survived' if 'Survived' in df_titanic.columns else 'target'
 cols_num = df_titanic.select_dtypes(include=[np.number]).columns.tolist()
 if target_col in cols_num:
@@ -34,7 +31,6 @@ if target_col in cols_num:
 if 'PassengerId' in cols_num:
     cols_num.remove('PassengerId')
 
-# Rellenar nulos básicos para evitar errores de modelado
 df_titanic[cols_num] = df_titanic[cols_num].fillna(df_titanic[cols_num].median())
 df_titanic = df_titanic.dropna(subset=[target_col])
 
@@ -57,14 +53,9 @@ print(porcentajes)
 mayoritaria = conteo.idxmax()
 minoritaria = conteo.idxmin()
 IR = conteo[mayoritaria] / conteo[minoritaria]
-
 print(f"\nRazón de desbalance (IR): {IR:.2f}")
-if IR > 1.5:
-    print("-> Resultado: El dataset está DESBALANCEADO (IR > 1.5)[cite: 3].\n")
-else:
-    print("-> Resultado: El dataset está balanceado.\n")
 
-# Gráfica 1: Distribución de Clases con anotaciones de porcentajes
+# Gráfica 1: Distribución de Clases
 plt.figure(figsize=(7, 5))
 ax = sns.countplot(data=df_titanic, x=target_col, palette='Blues_d')
 plt.title("1. Distribución de Clases (Titanic)", fontsize=13, pad=12, fontweight='bold')
@@ -80,25 +71,23 @@ plt.tight_layout()
 plt.savefig(os.path.join(carpeta_salida, "1_distribucion_clases_titanic.png"), dpi=300)
 plt.close()
 
-
-# División de datos (Train/Test estratificado)
+# División de datos
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-
-# 2. IMPLEMENTACIÓN Y EVALUACIÓN DE LAS 5 ESTRATEGIAS
+# 2. EVALUACIÓN Y GENERACIÓN DE IMÁGENES DE RESULTADOS (MATRICES DE CONFUSIÓN)
 estrategias = {
-    "1. Sin balanceo (Línea base)": (X_train, y_train, None),
-    "2. Ponderación de clases": (X_train, y_train, "balanced"),
-    "3. Sobremuestreo aleatorio": *RandomOverSampler(random_state=42).fit_resample(X_train, y_train), "none",
-    "4. Submuestreo aleatorio": *RandomUnderSampler(random_state=42).fit_resample(X_train, y_train), "none",
-    "5. SMOTE": *SMOTE(random_state=42).fit_resample(X_train, y_train), "none"
+    "2. Sin balanceo": (X_train, y_train, None),
+    "3. Ponderación de clases": (X_train, y_train, "balanced"),
+    "4. Sobremuestreo": *RandomOverSampler(random_state=42).fit_resample(X_train, y_train), "none",
+    "5. Submuestreo": *RandomUnderSampler(random_state=42).fit_resample(X_train, y_train), "none",
+    "6. SMOTE": *SMOTE(random_state=42).fit_resample(X_train, y_train), "none"
 }
 
-print("==========================================")
-print("EVALUACIÓN DE MODELOS POR ESTRATEGIA")
+print("\n==========================================")
+print("EVALUACIÓN Y GENERACIÓN DE MATRICES DE RESULTADO")
 print("==========================================")
 
-for nombre, datos in estrategias.items():
+for idx, (nombre, datos) in enumerate(estrategias.items(), start=2):
     if len(datos) == 3:
         X_tr, y_tr, cw = datos
         modelo = LogisticRegression(class_weight=cw, random_state=42, max_iter=1000)
@@ -111,5 +100,18 @@ for nombre, datos in estrategias.items():
     
     print(f"\n--- ESTRATEGIA: {nombre} ---")
     print(classification_report(y_test, y_pred, zero_division=0))
+    
+    # Generar imagen de la Matriz de Confusión como resultado del modelo
+    plt.figure(figsize=(6, 5))
+    cm = confusion_matrix(y_test, y_pred)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False)
+    plt.title(f"Resultado - {nombre}", fontsize=12, pad=10, fontweight='bold')
+    plt.xlabel("Predicción")
+    plt.ylabel("Valor Real")
+    plt.tight_layout()
+    
+    nombre_archivo = f"{idx}_matriz_resultado_{nombre.lower().replace(' ', '_').replace('.', '')}.png"
+    plt.savefig(os.path.join(carpeta_salida, nombre_archivo), dpi=300)
+    plt.close()
 
-print(f"\n¡Proceso de Titanic finalizado! Imágenes guardadas en la carpeta: '{carpeta_salida}'.")
+print(f"\n¡Proceso de Titanic finalizado! Gráficas de distribución y resultados guardadas en '{carpeta_salida}'.")
